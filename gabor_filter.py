@@ -1,10 +1,13 @@
+#%% import and create folders
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
 from scipy import misc
 from copy import deepcopy
+import os
+import math
 
-
+#%% define gabor function
 def gabor(x, y, sig, theta, gamma, lamb):
 
     x0 = x * np.cos(theta) + y * np.sin(theta)
@@ -15,7 +18,7 @@ def gabor(x, y, sig, theta, gamma, lamb):
 
     return g
 
-
+#%% define filter bank function and generate filter_bank
 def make_s1_filter_bank():
 
     # define layer 1 filter bank from Serre (2007)
@@ -55,18 +58,33 @@ def make_s1_filter_bank():
             ax[i, j].axes.get_xaxis().set_visible(False)
             ax[i, j].axes.get_yaxis().set_visible(False)
 
-    plt.tight_layout()
-    plt.show()
+    #create figures folder if it doesn't exist
+    if not os.path.exists('fig'):
+        os.makedirs('fig')
 
+    #create and save the plot
+    plt.tight_layout()
+    plt.savefig(os.getcwd() + "/fig/gabor_array.png")
+    #plt.show()
+    
     return filter_bank
 
 # create s1 filter bank
 filter_bank = make_s1_filter_bank()
 
-# grab a test image
+#%% apply filters and plot results
+# create figures folder if it doesn't exist
+fig_num = 0 # this is to define the filename. 0 is for the test image
+if not os.path.exists('fig'):
+    os.makedirs('fig')
+if not os.path.exists('fig/filtered'):
+    os.makedirs('fig/filtered')
+
+# grab and save a test image
 ascent = misc.ascent()
 plt.imshow(ascent, cmap='gray')
-plt.show()
+plt.savefig(os.getcwd() + "/fig/filtered/" + str(fig_num) + "_filtered.png")
+# plt.show()
 
 # roll over the image with a sliding window, and
 # for each window, compute the convolution.
@@ -76,13 +94,15 @@ num_windows_x = ((ascent.shape[0] - window_size) // stride) + 1
 num_windows_y = ((ascent.shape[1] - window_size) // stride) + 1
 num_windows = num_windows_x * num_windows_y
 
-for filt in filter_bank[0:8]:
+
+for filt in filter_bank:#[0:8]:
 
     # TODO: Modify the figure to show the current filter and the original image
     # along with the filtered image
     fig, ax = plt.subplots(nrows=num_windows_x,
                            ncols=num_windows_y,
                            figsize=(6, 6))
+    
 
     for i in range(num_windows_x):
         for j in range(num_windows_y):
@@ -105,5 +125,14 @@ for filt in filter_bank[0:8]:
             ax[j, i].axes.get_xaxis().set_visible(False)
             ax[j, i].axes.get_yaxis().set_visible(False)
 
+    # create and save the files
+    fig_num = fig_num + 1
+    fig_sz_range = [x for x in range(7, 39, 2)]
+    fig_sz = str(fig_sz_range[(math.ceil(((fig_num/4)-0.1)-1))])
+    fig_ang_range = [0,45,90,135]
+    fig_ang = str(fig_ang_range[(fig_num-1)-(math.floor(fig_num/4))*4])
+    fig_name = (str(fig_num)+ '_' + fig_sz + '_' + fig_ang + '_')
     plt.tight_layout()
-    plt.show()
+    plt.savefig(os.getcwd() + "/fig/filtered/filtered_" + fig_name + ".png")
+    # plt.show()
+
