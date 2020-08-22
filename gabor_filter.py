@@ -7,6 +7,7 @@ from copy import deepcopy
 import os
 import math
 
+
 #%% define gabor function
 def gabor(x, y, sig, theta, gamma, lamb):
 
@@ -17,6 +18,7 @@ def gabor(x, y, sig, theta, gamma, lamb):
                (2 * sig**2)) * np.cos(2 * np.pi * x0 / lamb)
 
     return g
+
 
 #%% define filter bank function and generate filter_bank
 def make_s1_filter_bank():
@@ -66,15 +68,16 @@ def make_s1_filter_bank():
     plt.tight_layout()
     plt.savefig(os.getcwd() + "/fig/gabor_array.png")
     #plt.show()
-    
+
     return filter_bank
+
 
 # create s1 filter bank
 filter_bank = make_s1_filter_bank()
 
 #%% apply filters and plot results
 # create figures folder if it doesn't exist
-fig_num = 0 # this is to define the filename. 0 is for the test image
+fig_num = 0  # this is to define the filename. 0 is for the test image
 if not os.path.exists('fig'):
     os.makedirs('fig')
 if not os.path.exists('fig/filtered'):
@@ -82,9 +85,11 @@ if not os.path.exists('fig/filtered'):
 
 # grab and save a test image
 ascent = misc.ascent()
-plt.imshow(ascent, cmap='gray')
+
+fig, ax = plt.subplots(nrows=1, ncols=1, squeeze=False, figsize=(4, 10))
+ax[0, 0].imshow(ascent, cmap='gray')
 plt.savefig(os.getcwd() + "/fig/filtered/" + str(fig_num) + "_filtered.png")
-# plt.show()
+# ax[0, 0].show()
 
 # roll over the image with a sliding window, and
 # for each window, compute the convolution.
@@ -94,15 +99,18 @@ num_windows_x = ((ascent.shape[0] - window_size) // stride) + 1
 num_windows_y = ((ascent.shape[1] - window_size) // stride) + 1
 num_windows = num_windows_x * num_windows_y
 
-
-for filt in filter_bank:#[0:8]:
+for filt in filter_bank[0:8]:
 
     # TODO: Modify the figure to show the current filter and the original image
     # along with the filtered image
     fig, ax = plt.subplots(nrows=num_windows_x,
                            ncols=num_windows_y,
                            figsize=(6, 6))
-    
+
+    s1_size = np.arange(7, 38, 2)
+    pool_1 = s1_size[0::2]
+    pool_2 = s1_size[1::2]
+    sub_img_filt_rec = []
 
     for i in range(num_windows_x):
         for j in range(num_windows_y):
@@ -121,6 +129,8 @@ for filt in filter_bank:#[0:8]:
                                              boundary='fill',
                                              mode='valid')
 
+            sub_img_filt_rec.append(sub_img_filt)
+
             ax[j, i].imshow(sub_img_filt, cmap='gray')
             ax[j, i].axes.get_xaxis().set_visible(False)
             ax[j, i].axes.get_yaxis().set_visible(False)
@@ -128,11 +138,32 @@ for filt in filter_bank:#[0:8]:
     # create and save the files
     fig_num = fig_num + 1
     fig_sz_range = [x for x in range(7, 39, 2)]
-    fig_sz = str(fig_sz_range[(math.ceil(((fig_num/4)-0.1)-1))])
-    fig_ang_range = [0,45,90,135]
-    fig_ang = str(fig_ang_range[(fig_num-1)-(math.floor(fig_num/4))*4])
-    fig_name = (str(fig_num)+ '_' + fig_sz + '_' + fig_ang + '_')
+    fig_sz = str(fig_sz_range[(math.ceil(((fig_num / 4) - 0.1) - 1))])
+    fig_ang_range = [0, 45, 90, 135]
+    fig_ang = str(fig_ang_range[(fig_num - 1) - (math.floor(fig_num / 4)) * 4])
+    fig_name = (str(fig_num) + '_' + fig_sz + '_' + fig_ang + '_')
     plt.tight_layout()
     plt.savefig(os.getcwd() + "/fig/filtered/filtered_" + fig_name + ".png")
     # plt.show()
 
+    ns = np.arange(8, 23, 2)
+    ds = np.array([4, 5, 6, 7, 8, 9, 10, 11])
+    sub_max = []
+    for band in range(pool_1.shape[0]):
+        sub_max_band = []
+        s1 = sub_img_filt_rec[band]
+        s2 = sub_img_filt_rec[band + 1]
+        num_win_x = ((s1.shape[0] - ns[band]) // ds[band]) + 1
+        num_win_y = ((s1.shape[1] - ns[band]) // ds[band]) + 1
+        num_win = num_win_x * num_win_y
+        for winx in range(num_win_x):
+            for winy in range(num_win_y):
+                x_ind = np.arange(i * ds[band], i * ds[band] + ns[band], 1)
+                y_ind = np.arange(j * ds[band], j * ds[band] + ns[band], 1)
+                xv_ind, yv_ind = np.meshgrid(x_ind, y_ind)
+                sub_s1 = s1[yv_ind, xv_ind]
+                sub_s2 = s2[yv_ind, xv_ind]
+                sub_s1_max = np.max(sub_s1)
+                sub_s2_max = np.max(sub_s2)
+                sub_max_band.append(np.max([sub_s1_max, sub_s2_max]))
+        sub_max.append(sub_max_band)
