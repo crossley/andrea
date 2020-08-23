@@ -46,7 +46,7 @@ def make_s1_filter_bank():
             filter_bank.append(g)
 
     # inspect s1 filters
-    fig, ax = plt.subplots(nrows=16, ncols=4, figsize=(2, 8))
+    # fig, ax = plt.subplots(nrows=16, ncols=4, figsize=(2, 8))
     for i in range(16):
         for j in range(4):
             step = 1
@@ -56,17 +56,17 @@ def make_s1_filter_bank():
             y = np.arange(-s1_size[-1], s1_size[-1], step)
             xv, yv = np.meshgrid(x, y)
             g = gabor(xv, yv, s1_sig[i], s1_orientations[j], 0.3, s1_lamb[i])
-            ax[i, j].imshow(g, cmap='gray')
-            ax[i, j].axes.get_xaxis().set_visible(False)
-            ax[i, j].axes.get_yaxis().set_visible(False)
+            # ax[i, j].imshow(g, cmap='gray')
+            # ax[i, j].axes.get_xaxis().set_visible(False)
+            # ax[i, j].axes.get_yaxis().set_visible(False)
 
     #create figures folder if it doesn't exist
     if not os.path.exists('fig'):
         os.makedirs('fig')
 
     #create and save the plot
-    plt.tight_layout()
-    plt.savefig(os.getcwd() + "/fig/gabor_array.png")
+    # plt.tight_layout()
+    # plt.savefig(os.getcwd() + "/fig/gabor_array.png")
     #plt.show()
 
     return filter_bank
@@ -86,9 +86,9 @@ if not os.path.exists('fig/filtered'):
 # grab and save a test image
 ascent = misc.ascent()
 
-fig, ax = plt.subplots(nrows=1, ncols=1, squeeze=False, figsize=(4, 10))
-ax[0, 0].imshow(ascent, cmap='gray')
-plt.savefig(os.getcwd() + "/fig/filtered/" + str(fig_num) + "_filtered.png")
+# fig, ax = plt.subplots(nrows=1, ncols=1, squeeze=False, figsize=(4, 10))
+# ax[0, 0].imshow(ascent, cmap='gray')
+# plt.savefig(os.getcwd() + "/fig/filtered/" + str(fig_num) + "_filtered.png")
 # ax[0, 0].show()
 
 # roll over the image with a sliding window, and
@@ -97,20 +97,18 @@ window_size = 512 // 4
 stride = window_size
 num_windows_x = ((ascent.shape[0] - window_size) // stride) + 1
 num_windows_y = ((ascent.shape[1] - window_size) // stride) + 1
-num_windows = num_windows_x * num_windows_y
 
-for filt in filter_bank[0:8]:
+sub_img_filt_rec = np.zeros((len(filter_bank), num_windows_x,
+                                num_windows_y, window_size, window_size))
 
-    # TODO: Modify the figure to show the current filter and the original image
-    # along with the filtered image
+# for filt in filter_bank:
+for k in range(len(filter_bank)):
+
+    filt = filter_bank[k]
+
     fig, ax = plt.subplots(nrows=num_windows_x,
                            ncols=num_windows_y,
                            figsize=(6, 6))
-
-    s1_size = np.arange(7, 38, 2)
-    pool_1 = s1_size[0::2]
-    pool_2 = s1_size[1::2]
-    sub_img_filt_rec = []
 
     for i in range(num_windows_x):
         for j in range(num_windows_y):
@@ -121,15 +119,15 @@ for filt in filter_bank[0:8]:
             xv_ind, yv_ind = np.meshgrid(x_ind, y_ind)
             sub_img = ascent[yv_ind, xv_ind]
 
-            # ax[j, i].imshow(sub_img, cmap='gray')
+            ax[j, i].imshow(sub_img, cmap='gray')
 
             # apply gabor filter
             sub_img_filt = signal.convolve2d(sub_img,
                                              filt,
                                              boundary='fill',
-                                             mode='valid')
+                                             mode='same')
 
-            sub_img_filt_rec.append(sub_img_filt)
+            sub_img_filt_rec[k, i, j, :, :] = sub_img_filt
 
             ax[j, i].imshow(sub_img_filt, cmap='gray')
             ax[j, i].axes.get_xaxis().set_visible(False)
@@ -145,25 +143,38 @@ for filt in filter_bank[0:8]:
     plt.tight_layout()
     plt.savefig(os.getcwd() + "/fig/filtered/filtered_" + fig_name + ".png")
     # plt.show()
+    plt.close('all')
+
+    # TODO: fix band iteration
+    # TODO: basically, matched orientations are every 4 elements
+    s1_size = np.arange(7, 39, 2)
+    pool_1 = s1_size[0::2]
+    pool_2 = s1_size[1::2]
 
     ns = np.arange(8, 23, 2)
     ds = np.array([4, 5, 6, 7, 8, 9, 10, 11])
-    sub_max = []
     for band in range(pool_1.shape[0]):
-        sub_max_band = []
-        s1 = sub_img_filt_rec[band]
-        s2 = sub_img_filt_rec[band + 1]
-        num_win_x = ((s1.shape[0] - ns[band]) // ds[band]) + 1
-        num_win_y = ((s1.shape[1] - ns[band]) // ds[band]) + 1
-        num_win = num_win_x * num_win_y
-        for winx in range(num_win_x):
-            for winy in range(num_win_y):
-                x_ind = np.arange(i * ds[band], i * ds[band] + ns[band], 1)
-                y_ind = np.arange(j * ds[band], j * ds[band] + ns[band], 1)
-                xv_ind, yv_ind = np.meshgrid(x_ind, y_ind)
-                sub_s1 = s1[yv_ind, xv_ind]
-                sub_s2 = s2[yv_ind, xv_ind]
-                sub_s1_max = np.max(sub_s1)
-                sub_s2_max = np.max(sub_s2)
-                sub_max_band.append(np.max([sub_s1_max, sub_s2_max]))
-        sub_max.append(sub_max_band)
+        for i in range(sub_img_filt_rec.shape[1]):
+            for j in range(sub_img_filt_rec.shape[2]):
+                s1 = sub_img_filt_rec[band, i, j, :, :]
+                s2 = sub_img_filt_rec[band + 1, i, j, :, :]
+
+    # sub_max = []
+    # for band in range(pool_1.shape[0]):
+    #     sub_max_band = []
+    #     s1 = sub_img_filt_rec[band]
+    #     s2 = sub_img_filt_rec[band + 1]
+    #     num_win_x = ((s1.shape[0] - ns[band]) // ds[band]) + 1
+    #     num_win_y = ((s1.shape[1] - ns[band]) // ds[band]) + 1
+    #     num_win = num_win_x * num_win_y
+    #     for winx in range(num_win_x):
+    #         for winy in range(num_win_y):
+    #             x_ind = np.arange(i * ds[band], i * ds[band] + ns[band], 1)
+    #             y_ind = np.arange(j * ds[band], j * ds[band] + ns[band], 1)
+    #             xv_ind, yv_ind = np.meshgrid(x_ind, y_ind)
+    #             sub_s1 = s1[yv_ind, xv_ind]
+    #             sub_s2 = s2[yv_ind, xv_ind]
+    #             sub_s1_max = np.max(sub_s1)
+    #             sub_s2_max = np.max(sub_s2)
+    #             sub_max_band.append(np.max([sub_s1_max, sub_s2_max]))
+    #     sub_max.append(sub_max_band)
