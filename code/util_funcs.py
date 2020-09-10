@@ -133,44 +133,28 @@ def get_c1(s1):
                                     'constant',
                                     constant_values=np.nan)
 
-                # np.reshape(cc1_padded[~np.isnan(cc1_padded)], (10, 10))
-
                 c1[band, i, j, :, :] = cc1_padded
 
     return c1
 
 
-def train_s2(c1_in, filter_bank, window_size):
+def make_s2_filter_bank(c1_in, filter_bank, window_size):
 
     prototype_list = []
 
-    n_prototype = 2
-    n_scale = c1_in.shape[0] // 8
-    band_scales = np.arange(8, 23, 2)
     rf_size = 3
+    n_prototype = 5
+    n_scale = c1_in.shape[0] // 4
+    band_scales = np.arange(8, 23, 2)
 
     img_file_list = os.listdir("../images")
-    for i in range(n_prototype):  # patches
+    for i in range(n_prototype):
 
         img_file = np.random.choice(img_file_list)
         img = imread('../images/' + img_file)
 
         s1 = get_s1(img, filter_bank, window_size)
         c1 = get_c1(s1)
-
-        # TODO: What does this mean? I think it means that the cc1 variable
-        # below needs to pick out all four orientations.
-
-        # s1.shape
-        # (64, 4, 4, 128, 128)
-        # c1.shape
-        # (32, 4, 4, 128, 128)
-        # s2.shape
-        # (N, 4, n, n)???
-
-        # These prototypes are extracted at the level of the C1 layer across
-        # all four orientations, i.e., a patch of size n n contains n n 4
-        # elements.
 
         # At the ith image presentation, one unit at a particular position and
         # scale is selected (at random) from the ith feature-map and is
@@ -180,36 +164,84 @@ def train_s2(c1_in, filter_bank, window_size):
         # field.
 
         # remove nan padding
-        cc1 = c1[0, 0, 0, :, :]
-        keep = ~np.all(np.isnan(cc1), 0)
-        cc1 = cc1[keep, :]
-        keep = np.all(~np.isnan(cc1), 0)
-        cc1 = cc1[:, keep]
+        prototype_list_2 = []
+        for j in range(4):
 
-        scale = np.random.choice(band_scales)
-        x0 = np.random.randint(0, scale - rf_size)
-        y0 = np.random.randint(0, scale - rf_size)
-        x = np.arange(x0, x0 + rf_size)
-        y = np.arange(y0, y0 + rf_size)
-        xv_ind, yv_ind = np.meshgrid(x, y)
+            scale_ind = np.random.randint(0, n_scale)
+            scale = band_scales[scale_ind]
 
-        prototype = cc1[xv_ind, yv_ind]
+            retx = np.random.randint(0, c1.shape[1])
+            rety = np.random.randint(0, c1.shape[2])
+            cc1 = c1[j * n_scale + scale_ind, retx, rety, :, :]
 
-        print(prototype)
+            keep = ~np.all(np.isnan(cc1), 0)
+            cc1 = cc1[keep, :]
+            keep = np.all(~np.isnan(cc1), 0)
+            cc1 = cc1[:, keep]
 
-        # TODO: I'm not sure what this means
-        # During this learning stage, we also assume that the image moves
-        # (shifts and looms) so that the selectivity of the unit that was just
-        # imprinted is generalised to units in the same feature map across
-        # scales and positions
+            x0 = np.random.randint(0, cc1.shape[0] - rf_size)
+            y0 = np.random.randint(0, cc1.shape[1] - rf_size)
+            x = np.arange(x0, x0 + rf_size)
+            y = np.arange(y0, y0 + rf_size)
+            xv_ind, yv_ind = np.meshgrid(x, y)
+
+            prototype_list_2.append(cc1[xv_ind, yv_ind])
+
+        prototype = np.stack(prototype_list_2)
+        prototype = np.mean(prototype, 0) / np.linalg.norm(prototype)
 
         prototype_list.append(prototype)
 
     return prototype_list
 
 
-def get_s2(s2):
-    pass
+def get_s2(c1, filter_bank, window_size):
+
+    for ii in range(c1.shape[0]):
+        for jj in range(c1.shape[1]):
+            for kk in range(c1.shape[2]):
+
+                cc1 = c1[ii, jj, kk, :, :]
+                keep = ~np.all(np.isnan(cc1), 0)
+                cc1 = cc1[keep, :]
+                keep = np.all(~np.isnan(cc1), 0)
+                cc1 = cc1[:, keep]
+
+                # roll over the image with a sliding window, and
+                # for each window, compute the convolution.
+                stride = window_size
+                num_windows_x = ((cc1.shape[0] - window_size) // stride) + 1
+                num_windows_y = ((cc1.shape[1] - window_size) // stride) + 1
+
+                filt_img_rec = np.zeros(
+                    (len(filter_bank), num_windows_x, num_windows_y,
+                     window_size, window_size))
+
+                for k in range(len(filter_bank)):
+
+                    filt = filter_bank[k]
+
+                    for i in range(num_windows_x):
+                        for j in range(num_windows_y):
+
+                            # select pixels from image to be filtered with the
+                            # current window
+                            x_ind = np.arange(i * stride,
+                                              i * stride + window_size, 1)
+                            y_ind = np.arange(j * stride,
+                                              j * stride + window_size, 1)
+                            xv_ind, yv_ind = np.meshgrid(x_ind, y_ind)
+                            sub_img = cc1[yv_ind, xv_ind]
+
+                            # apply filter
+                            filt_img = signal.convolve2d(sub_img,
+                                                         filt,
+                                                         boundary='fill',
+                                                         mode='same')
+
+                            filt_img_rec[k, i, j, :, :] = filt_img
+
+    return filt_img_rec
 
 
 def get_c2(s2):
