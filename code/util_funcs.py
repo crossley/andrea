@@ -1,12 +1,9 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
 from skimage.measure import block_reduce
-
-
-def get_training_images():
-    # http://decsai.ugr.es/cvg/CG/base.htm
-    pass
+from imageio import imread
 
 
 def gabor(x, y, sig, theta, gamma, lamb):
@@ -145,11 +142,9 @@ def get_c1(s1):
 
 def train_s2(c1_in, filter_bank, window_size):
 
-    # TODO: populate ../images directory with images
-
     prototype_list = []
 
-    n_prototype = 10
+    n_prototype = 2
     n_scale = c1_in.shape[0] // 8
     band_scales = np.arange(8, 23, 2)
     rf_size = 3
@@ -158,10 +153,24 @@ def train_s2(c1_in, filter_bank, window_size):
     for i in range(n_prototype):  # patches
 
         img_file = np.random.choice(img_file_list)
-        img = misc.imread('../' + img_file)
-        # TODO: subsample image?
+        img = imread('../images/' + img_file)
+
         s1 = get_s1(img, filter_bank, window_size)
         c1 = get_c1(s1)
+
+        # TODO: What does this mean? I think it means that the cc1 variable
+        # below needs to pick out all four orientations.
+
+        # s1.shape
+        # (64, 4, 4, 128, 128)
+        # c1.shape
+        # (32, 4, 4, 128, 128)
+        # s2.shape
+        # (N, 4, n, n)???
+
+        # These prototypes are extracted at the level of the C1 layer across
+        # all four orientations, i.e., a patch of size n n contains n n 4
+        # elements.
 
         # At the ith image presentation, one unit at a particular position and
         # scale is selected (at random) from the ith feature-map and is
@@ -169,20 +178,32 @@ def train_s2(c1_in, filter_bank, window_size):
         # current pattern of activity from its afferent inputs, in response to
         # the part of the natural image i that falls within its receptive
         # field.
+
+        # remove nan padding
+        cc1 = c1[0, 0, 0, :, :]
+        keep = ~np.all(np.isnan(cc1), 0)
+        cc1 = cc1[keep, :]
+        keep = np.all(~np.isnan(cc1), 0)
+        cc1 = cc1[:, keep]
+
         scale = np.random.choice(band_scales)
         x0 = np.random.randint(0, scale - rf_size)
         y0 = np.random.randint(0, scale - rf_size)
         x = np.arange(x0, x0 + rf_size)
-        y = np.arange(x0, x0 + rf_size)
+        y = np.arange(y0, y0 + rf_size)
         xv_ind, yv_ind = np.meshgrid(x, y)
 
-        prototype = c1[yv_ind, xv_ind]
-        prototype = np.linalg.norm(prototype)
+        prototype = cc1[xv_ind, yv_ind]
 
+        print(prototype)
+
+        # TODO: I'm not sure what this means
         # During this learning stage, we also assume that the image moves
         # (shifts and looms) so that the selectivity of the unit that was just
         # imprinted is generalised to units in the same feature map across
         # scales and positions
+
+        prototype_list.append(prototype)
 
     return prototype_list
 
